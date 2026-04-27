@@ -1,0 +1,232 @@
+:root {
+  --fg: #1f2328;
+  --muted: #57606a;
+  --bg: #ffffff;
+  --bg-alt: #f6f8fa;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent-bg: #ddf4ff;
+  --pill-prod: #1a7f37;
+  --pill-prog: #9a6700;
+  --pill-exp:  #8250df;
+  --pill-arch: #57606a;
+  --error: #cf222e;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font: 12px/1.5 "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--bg-alt);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100%; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { font-weight: 600; font-size: 16px; color: var(--fg); }
+.brand:hover { text-decoration: none; }
+
+.searchbox { flex: 1; max-width: 480px; }
+.searchbox input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.searchbox input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.navlinks { display: flex; gap: 12px; }
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.linkbtn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+.linkbtn:hover { text-decoration: underline; }
+
+.content {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.loading, .error, .empty { padding: 40px; text-align: center; color: var(--muted); }
+.error { color: var(--error); }
+
+.muted { color: var(--muted); }
+
+/* Home */
+.home section { margin-bottom: 32px; }
+.home h2 { margin: 0 0 12px; font-size: 18px; }
+.cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--bg);
+}
+.card-title { display: block; font-weight: 600; margin-bottom: 6px; }
+.card-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 6px; }
+.card-desc { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.unmigrated { margin-top: 16px; }
+.unmigrated summary { cursor: pointer; color: var(--muted); }
+
+.pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--muted);
+  text-transform: lowercase;
+}
+.pill-production { background: var(--pill-prod); }
+.pill-in-progress { background: var(--pill-prog); }
+.pill-experimental { background: var(--pill-exp); }
+.pill-archived { background: var(--pill-arch); }
+
+/* Doc layout */
+.doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  grid-template-areas: "head head" "body toc" "links links";
+  gap: 24px;
+}
+.doc-head { grid-area: head; }
+.doc-body { grid-area: body; min-width: 0; }
+.toc { grid-area: toc; }
+.backlinks { grid-area: links; }
+
+@media (max-width: 800px) {
+  .doc { grid-template-columns: 1fr; grid-template-areas: "head" "toc" "body" "links"; }
+}
+
+.doc-head h1 { margin: 0 0 8px; font-size: 24px; }
+.doc-meta { display: flex; gap: 12px; align-items: center; font-size: 12px; margin-bottom: 8px; }
+.doc-status, .doc-applies { margin: 4px 0 0; color: var(--muted); }
+
+.toc {
+  position: sticky;
+  top: 64px;
+  align-self: start;
+  font-size: 13px;
+}
+.toc h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.toc ul { list-style: none; padding: 0; margin: 0; }
+.toc li { padding: 2px 0; }
+
+/* Markdown body */
+.doc-body h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-top: 24px; }
+.doc-body h2 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-top: 28px; }
+.doc-body h3 { font-size: 15px; margin-top: 20px; }
+.doc-body pre {
+  background: var(--bg-alt);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  font: 12px/1.5 "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+.doc-body pre code { background: none; padding: 0; }
+.doc-body table { border-collapse: collapse; margin: 12px 0; }
+.doc-body th, .doc-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.doc-body th { background: var(--bg-alt); }
+.doc-body blockquote {
+  border-left: 4px solid var(--border);
+  margin: 12px 0;
+  padding: 4px 12px;
+  color: var(--muted);
+}
+
+/* Backlinks footer */
+.backlinks { border-top: 1px solid var(--border); padding-top: 16px; }
+.backlinks h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 8px; }
+.backlinks ul { list-style: none; padding: 0; margin: 0; }
+.backlinks li { padding: 2px 0; font-size: 13px; }
+
+/* Search */
+.search h1 { margin-top: 0; }
+.results { list-style: none; padding: 0; margin: 0; }
+.result { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.snippet { margin: 4px 0 0; font-size: 13px; color: var(--fg); }
+.snippet mark { background: #fff8c5; padding: 0 2px; }
+
+/* Validation */
+.issues { width: 100%; border-collapse: collapse; }
+.issues th, .issues td { border-bottom: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; font-size: 13px; }
+.issues th { background: var(--bg-alt); }
+.sev-error td:first-child { color: var(--error); font-weight: 600; }
+.sev-warning td:first-child { color: var(--pill-prog); font-weight: 600; }
+.sev-info td:first-child { color: var(--muted); }
+
+/* Login */
+.login {
+  max-width: 380px;
+  margin: 80px auto;
+  text-align: center;
+  padding: 24px;
+}
+.login h1 { margin: 0 0 12px; font-size: 24px; }
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.btn:hover { text-decoration: none; opacity: 0.92; }
+
+/* Mobile overrides — must come after base rules to win the cascade */
+@media (max-width: 800px) {
+  .toc { position: static; top: auto; }
+}
+
+@media (max-width: 600px) {
+  .topbar { flex-wrap: wrap; gap: 10px 12px; padding: 10px 14px; }
+  .searchbox { order: 99; flex-basis: 100%; max-width: none; }
+  .user { font-size: 13px; }
+  .content { padding: 16px 14px 40px; }
+}
