@@ -1,0 +1,17 @@
+[Unit]
+Description=agent-wiki — daily sweep + reindex (oneshot)
+After=network-online.target
+Wants=network-online.target
+
+# User-mode service: runs in the secorp user session via systemctl --user,
+# so it can write freely under /home/secorp/termag/projects without the
+# ProtectHome=read-only sandbox the main agent-wiki.service uses.
+
+[Service]
+Type=oneshot
+ExecStart=/home/secorp/termag/projects/agent-wiki/deploy/run-daily.sh
+# Anthropic API calls + 17 sequential sweeps can take 5–10 minutes.
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=default.target

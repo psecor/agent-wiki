@@ -1,11 +1,12 @@
 ---
 project: agent-wiki
-status: in-progress
-status_description: "Spec + indexer + read-only HTTP API + React UI built. Deploy artifacts written; not yet installed on secorp.net. No maintenance/sweeper service yet."
-last_updated: 2026-04-25
+status: production
+status_description: "Live at https://secorp.net/wiki. All 17 sibling projects migrated. Daily sweeper timer + Claude Code Stop-hook installed. Topics tier still empty."
+last_updated: 2026-04-27
 last_updated_by:
   - agent:claude-opus-4-7
   - human:secorp
+  - agent:sweeper-claude-opus-4-7
 wiki_schema_version: 1
 ---
 
@@ -17,18 +18,19 @@ A documentation standard and supporting service for per-project agent-readable w
 
 ## Status
 
-**Spec + indexer + server + UI.** Today:
+**Spec + indexer + server + UI + sweeper.** Today:
 
 - Spec defined ([spec/schema.md](spec/schema.md)), template ([spec/template.md](spec/template.md)), topics tier rules ([spec/topics.md](spec/topics.md)). `topics/` empty.
-- Indexer runs clean: parses frontmatter + sections + links, validates, writes `index/{projects,topics,backlinks,search,validation}.json`.
+- Indexer runs clean: parses frontmatter + sections + links, validates, writes `index/{projects,topics,backlinks,search,validation}.json`. Also writes generated backlinks footers back into source `AGENTS.md` files (`write_backlinks.ts`).
 - Read-only HTTP API in `service/src/server/` with Google OAuth (allowlist) + file-based sessions, mounted at `/wiki`. JSON endpoints for projects, topics, search, validation, raw doc bodies.
 - React + Vite UI in `ui/`, served by the Express process from `ui/dist/`. Pages: Home, Project, Topic, Search, Validation, Login. Markdown rendered with `react-markdown` + `remark-gfm`; cross-doc links rewritten to in-app routes.
-- Deploy artifacts under `deploy/`: systemd unit, Apache snippet, setup walkthrough — not yet installed on secorp.net.
-- Three sibling projects migrated (4 if you count this one): [rssreader](../rssreader/AGENTS.md), [meeting-slack-app](../meeting-slack-app/AGENTS.md), [termag](../termag/AGENTS.md). Their `CLAUDE.md` files are `@AGENTS.md` stubs.
-- 11 sibling projects unmigrated (visible in `index/projects.json` under `unmigrated`).
-- No automatic re-indexing yet (`npm run indexer:built -- build` after edits). No Stop hooks installed. No maintenance/sweeper service.
+- Sweeper service in `service/src/sweeper/`: gathers per-project git activity since `last_updated`, calls the Claude API (streaming, 32k max_tokens, string-aware brace-counter parser), applies section-level patches, updates frontmatter. CLI supports per-project runs, `--all` fan-out, and `--dry-run`.
+- Deployed to secorp.net: `agent-wiki.service` runs as system-mode systemd on `127.0.0.1:3045`; Apache vhost proxies `/wiki → 127.0.0.1:3045/wiki`; `https://secorp.net/wiki` serves the UI behind Google OAuth allowlist. Deploy walkthrough in [deploy/setup.md](deploy/setup.md).
+- All 17 sibling projects migrated and committed; each has an `AGENTS.md` plus a `CLAUDE.md` stub of `@AGENTS.md`.
+- Scheduling installed locally: daily user-mode systemd timer at 03:00 (`agent-wiki-sweeper.timer`) runs `sweeper --all && indexer build`; Claude Code Stop-hook fires per-project sweep async via `systemd-run --user --no-block`, debounced to 60 min/project (mtime stamps in `~/.local/state/agent-wiki/last-sweep/`).
+- `~/.claude/CLAUDE.md` documents the AGENTS.md convention so future sessions read it before grepping.
 
-Next milestones: deploy to secorp.net (one-time install per `deploy/setup.md`); periodic indexer sweep; maintenance/sweeper service that calls the Claude API to keep docs fresh; update `~/.claude/CLAUDE.md` to teach future sessions about the convention.
+Next milestones: backfill `topics/` with cross-cutting knowledge as it surfaces in real sessions; (stretch) public GitHub-backed variant.
 
 ## Repository Layout
 
@@ -57,16 +59,26 @@ agent-wiki/
 │       │   ├── build.ts       orchestration
 │       │   ├── parse.ts       frontmatter, sections, links
 │       │   ├── validate.ts    spec-compliance checks
+│       │   ├── write_backlinks.ts  rewrite generated backlinks footers in source files
 │       │   ├── types.ts       shared types + canonical section list
 │       │   └── sources/       Source interface + filesystem impl
 │       │       ├── types.ts   pluggable for future GitHub-backed source
 │       │       └── fs.ts      walks ~/termag/projects/
-│       └── server/            Express + Passport (Google OAuth) + JSON API
-│           ├── index.ts       app entry; mounts /wiki, listens on :3045
-│           ├── config.ts      env-driven config; required()/optional()
-│           ├── auth.ts        Google OAuth + ALLOWED_EMAILS allowlist
-│           ├── api.ts         JSON endpoints under /api
-│           └── data.ts        reads index JSON + raw markdown (path-traversal safe)
+│       ├── server/            Express + Passport (Google OAuth) + JSON API
+│       │   ├── index.ts       app entry; mounts /wiki, listens on :3045
+│       │   ├── config.ts      env-driven config; required()/optional()
+│       │   ├── auth.ts        Google OAuth + ALLOWED_EMAILS allowlist
+│       │   ├── api.ts         JSON endpoints under /api
+│       │   └── data.ts        reads index JSON + raw markdown (path-traversal safe)
+│       └── sweeper/           per-project doc maintenance via Claude API
+│           ├── cli.ts         CLI: run | dry-run; per-project or all
+│           ├── run.ts         orchestrates one project's sweep
+│           ├── gather.ts      git log + diffstat + changed files since last_updated
+│           ├── prompt.ts      assembles the system + user prompt
+│           ├── claude.ts      Claude API client wrapper
+│           ├── apply.ts       applies section-level patches + frontmatter updates
+│           ├── diff.ts        shows the proposed change
+│           └── types.ts       shared sweeper types
 ├── ui/                        React + Vite SPA, served by the backend
 │   ├── package.json
 │   ├── vite.config.ts         base: '/wiki/', dev proxy → :3045
@@ -162,9 +174,20 @@ Visit `http://localhost:5173/wiki/` for the Vite dev server, or `http://localhos
 
 ```bash
 cd service
-npm run indexer -- build        # rebuild index/*.json
+npm run indexer -- build        # rebuild index/*.json (also rewrites backlinks footers)
 npm run indexer -- validate     # validate-only; exit non-zero on errors
 ```
+
+**Sweeper CLI:**
+
+```bash
+cd service
+npm run sweeper -- run --project rssreader      # sweep one project
+npm run sweeper -- run --all                     # sweep every migrated project
+npm run sweeper -- run --project foo --dry-run   # show patch without writing
+```
+
+Requires `ANTHROPIC_API_KEY` in `service/.env`. Sweeper reads each project's `last_updated`, gathers git activity since then, calls the Claude API for proposed section-level patches, and applies them in place. Re-run the indexer afterward to refresh `index/*.json`.
 
 **Production deploy (one-time install):** see `deploy/setup.md` for the full walkthrough. Summary: build, fill in `service/.env`, install systemd unit (`deploy/agent-wiki.service`), splice Apache snippet (`deploy/apache.conf`) into `secorp.conf`, reload Apache.
 

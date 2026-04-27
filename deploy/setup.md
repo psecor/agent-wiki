@@ -101,16 +101,126 @@ Google account.
 
 ## 6. Keeping the index fresh
 
-For v1, re-run the indexer manually after AGENTS.md edits:
+You can re-run the indexer manually after AGENTS.md edits:
 
 ```sh
 cd ~/termag/projects/agent-wiki/service
 npm run indexer:built -- build
 ```
 
-A periodic sweeper (cron / systemd timer) is on the roadmap; until
-then, this is a one-liner. The server reads JSON on every request, so
-a fresh `build` is picked up immediately — no restart needed.
+The server reads JSON on every request, so a fresh `build` is picked
+up immediately — no restart needed.
+
+For unattended freshness, the daily sweeper timer (next section) runs
+the indexer automatically after each sweep.
+
+## 7. Daily sweeper timer
+
+A user-mode systemd timer runs `sweeper --all` followed by `indexer
+build` once a day at 03:00 local. Output goes to `journalctl --user`
+**and** is tee'd to `~/.local/state/agent-wiki/last-run.log` for quick
+review.
+
+```sh
+# Install the unit files into the user systemd config.
+mkdir -p ~/.config/systemd/user
+cp ~/termag/projects/agent-wiki/deploy/agent-wiki-sweeper.service \
+   ~/termag/projects/agent-wiki/deploy/agent-wiki-sweeper.timer \
+   ~/.config/systemd/user/
+
+systemctl --user daemon-reload
+systemctl --user enable --now agent-wiki-sweeper.timer
+
+# So the timer fires even when you're not logged in:
+sudo loginctl enable-linger "$USER"
+```
+
+Verify and observe:
+
+```sh
+systemctl --user list-timers agent-wiki-sweeper.timer
+journalctl --user -u agent-wiki-sweeper -n 200
+cat ~/.local/state/agent-wiki/last-run.log
+```
+
+Trigger a manual run (useful for first-time validation):
+
+```sh
+systemctl --user start agent-wiki-sweeper.service
+# …or run the script directly outside of systemd:
+~/termag/projects/agent-wiki/deploy/run-daily.sh
+```
+
+Edit the cadence by changing `OnCalendar=` in the `.timer` file and
+re-running `systemctl --user daemon-reload`.
+
+## 8. Claude Code Stop-hook integration
+
+When a Claude Code session ends in a `~/termag/projects/<project>/`
+directory, fire a per-project sweep so the wiki stays current with the
+work that just happened. The hook is debounced to **60 minutes per
+project**, so a long active dev session doesn't trigger 20+ Claude API
+calls — the daily timer (§7) is the backstop.
+
+The two scripts live in `deploy/`:
+
+- `sweep-on-stop.sh` — hook target. Reads JSON on stdin, extracts
+  `cwd`, validates the project, debounces, then fires the sweep
+  asynchronously via `systemd-run --user --no-block` so the hook
+  returns immediately and never blocks the agent.
+- `sweep-project.sh` — the actual per-project sweeper + reindexer.
+  Invoked by the hook async path; also usable directly.
+
+Wire it into `~/.claude/settings.json` by appending a third entry to
+the existing `Stop` hook block:
+
+```json
+"Stop": [
+  {
+    "hooks": [
+      { "type": "command", "command": "..." },
+      { "type": "command", "command": "..." },
+      {
+        "type": "command",
+        "command": "/home/secorp/termag/projects/agent-wiki/deploy/sweep-on-stop.sh"
+      }
+    ]
+  }
+]
+```
+
+Validate the file parses:
+
+```sh
+python3 -c "import json; json.load(open('$HOME/.claude/settings.json'))"
+```
+
+State + logs land in `~/.local/state/agent-wiki/`:
+
+- `stop-hook.log` — one line per Stop event (`queued <project>` or
+  `skip <project>: swept Ns ago`).
+- `last-sweep/<project>` — debounce stamp; mtime is the last queue time.
+- `sweep-<project>.log` — appended sweeper + indexer output per project.
+
+Verify and observe:
+
+```sh
+tail -f ~/.local/state/agent-wiki/stop-hook.log
+journalctl --user -u 'agent-wiki-sweep-*' -f
+```
+
+Manual trigger (bypasses the hook entirely):
+
+```sh
+~/termag/projects/agent-wiki/deploy/sweep-project.sh <project>
+```
+
+To temporarily disable the hook without editing settings.json, just
+make the script non-executable:
+
+```sh
+chmod -x ~/termag/projects/agent-wiki/deploy/sweep-on-stop.sh
+```
 
 ## Troubleshooting
 - **"GOOGLE_CLIENT_ID is required in environment"** — `.env` not present

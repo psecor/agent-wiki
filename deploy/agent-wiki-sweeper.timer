@@ -1,0 +1,16 @@
+[Unit]
+Description=Daily agent-wiki sweep + reindex
+Requires=agent-wiki-sweeper.service
+
+[Timer]
+# Daily at 03:00 local. Persistent=true catches up missed runs (laptop
+# asleep, machine off) on the next boot. RandomizedDelaySec adds 0–5 min
+# of jitter so we don't hammer the Anthropic API at the exact same wall
+# clock as anyone else.
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=agent-wiki-sweeper.service
+
+[Install]
+WantedBy=timers.target

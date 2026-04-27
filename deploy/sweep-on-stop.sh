@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Claude Code Stop-hook target: when an agent session ends, fire a
+# per-project sweep for the project the session was working in.
+#
+# Wired into ~/.claude/settings.json as a Stop hook entry. Reads the
+# hook payload (JSON) on stdin, extracts cwd, and:
+#   1. Skips silently if cwd isn't under PROJECTS_ROOT or the project
+#      has no AGENTS.md.
+#   2. Skips if a sweep was already kicked off in the last 60 min
+#      (debounce — Stop fires every turn during active dev).
+#   3. Otherwise fires sweep-project.sh asynchronously via systemd-run
+#      so the Stop hook returns immediately and never blocks the agent.
+#
+# All hook scripts must exit 0 quickly: failures here must NOT break
+# the user's Claude session, so we swallow errors and log them.
+
+set -uo pipefail
+
+PROJECTS_ROOT="/home/secorp/termag/projects"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+STATE_DIR="${HOME}/.local/state/agent-wiki"
+DEBOUNCE_DIR="${STATE_DIR}/last-sweep"
+HOOK_LOG="${STATE_DIR}/stop-hook.log"
+DEBOUNCE_SECS=3600  # 60 min
+
+mkdir -p "${DEBOUNCE_DIR}"
+
+log() { echo "$(date -Iseconds) $*" >> "${HOOK_LOG}"; }
+
+INPUT="$(cat)"
+CWD="$(printf '%s' "${INPUT}" | python3 -c \
+  'import sys, json; d=json.load(sys.stdin); print(d.get("cwd",""))' 2>/dev/null \
+  || true)"
+
+if [[ -z "${CWD}" ]]; then
+  exit 0
+fi
+
+# cwd must be under PROJECTS_ROOT.
+if [[ "${CWD}" != "${PROJECTS_ROOT}/"* ]]; then
+  exit 0
+fi
+
+# Project name = first path component after PROJECTS_ROOT.
+REL="${CWD#${PROJECTS_ROOT}/}"
+PROJECT="${REL%%/*}"
+
+if [[ -z "${PROJECT}" || "${PROJECT}" == .* ]]; then
+  exit 0
+fi
+
+if [[ ! -f "${PROJECTS_ROOT}/${PROJECT}/AGENTS.md" ]]; then
+  exit 0
+fi
+
+# Debounce.
+STAMP="${DEBOUNCE_DIR}/${PROJECT}"
+if [[ -f "${STAMP}" ]]; then
+  NOW=$(date +%s)
+  THEN=$(stat -c %Y "${STAMP}" 2>/dev/null || echo 0)
+  AGE=$(( NOW - THEN ))
+  if (( AGE < DEBOUNCE_SECS )); then
+    log "skip ${PROJECT}: swept ${AGE}s ago"
+    exit 0
+  fi
+fi
+
+# Claim the slot before forking, so concurrent Stops bail.
+touch "${STAMP}"
+
+# Fire-and-forget. systemd-run --user --no-block returns immediately;
+# the sweep runs as a transient unit owned by the user manager.
+if ! systemd-run --user --no-block \
+      --unit="agent-wiki-sweep-${PROJECT}-$$" \
+      --description="agent-wiki sweep ${PROJECT}" \
+      "${SCRIPT_DIR}/sweep-project.sh" "${PROJECT}" >/dev/null 2>&1; then
+  log "systemd-run failed for ${PROJECT}"
+  exit 0
+fi
+
+log "queued ${PROJECT}"
+exit 0
