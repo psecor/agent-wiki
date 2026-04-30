@@ -85,10 +85,10 @@ consume. Tabular: event/endpoint, payload shape, when emitted.>
 ## Related
 
 **Other projects:**
-- [project-name](../project-name/AGENTS.md) — <relationship in one phrase>
+- _none yet_
 
 **Topics:**
-- [topic name](../agent-wiki/topics/<topic-slug>.md) — <why it's relevant here>
+- _none yet_
 
 <!-- agent-wiki:backlinks-start -->
 _No incoming links yet._
