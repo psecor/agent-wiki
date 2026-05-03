@@ -20,13 +20,13 @@ Every `AGENTS.md` starts with YAML frontmatter:
 
 ```yaml
 ---
-project: rssreader
+project: my-cool-project
 status: production            # production | in-progress | experimental | archived
-status_description: "Live at secorp.net/rssreader; feature-stable, occasional small adds."
+status_description: "Live at example.com/cool-project; feature-stable, occasional small adds."
 last_updated: 2026-04-25
 last_updated_by:
   - agent:claude-opus-4-7
-  - human:secorp
+  - human:yourname
 wiki_schema_version: 1
 ---
 ```

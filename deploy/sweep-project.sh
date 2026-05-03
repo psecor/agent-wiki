@@ -2,7 +2,7 @@
 # Per-project sweep + reindex. Invoked by the Stop-hook async path
 # (see sweep-on-stop.sh) and usable directly for ad-hoc sweeps:
 #
-#   ~/termag/projects/agent-wiki/deploy/sweep-project.sh <project>
+#   <repo>/deploy/sweep-project.sh <project>
 #
 # Output is appended to ~/.local/state/agent-wiki/sweep-<project>.log.
 
@@ -14,7 +14,8 @@ if [[ $# -ne 1 ]]; then
 fi
 
 PROJECT="$1"
-SERVICE_DIR="/home/secorp/termag/projects/agent-wiki/service"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVICE_DIR="$(cd "${SCRIPT_DIR}/../service" && pwd)"
 STATE_DIR="${HOME}/.local/state/agent-wiki"
 LOG="${STATE_DIR}/sweep-${PROJECT}.log"
 

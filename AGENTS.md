@@ -1,11 +1,10 @@
 ---
 project: agent-wiki
 status: production
-status_description: "Live at https://secorp.net/wiki. All 17 sibling projects migrated. Daily sweeper timer + Claude Code Stop-hook installed. Topics tier still empty."
-last_updated: 2026-04-28
+status_description: "A documentation standard and supporting service for per-project agent-readable wikis. Spec, indexer, web service, and Claude-powered sweeper for keeping AGENTS.md files fresh."
+last_updated: 2026-05-03
 last_updated_by:
   - agent:claude-opus-4-7
-  - human:secorp
   - agent:sweeper-claude-opus-4-7
 wiki_schema_version: 1
 ---
@@ -14,23 +13,18 @@ wiki_schema_version: 1
 
 ## What This Is
 
-A documentation standard and supporting service for per-project agent-readable wikis. Each project under `~/termag/projects/` gets a single `AGENTS.md` describing intent, architecture, deployment, gotchas, and cross-project links. This repo defines the spec, hosts cross-cutting topics, and runs the read-only browser/API at `https://secorp.net/wiki` (Apache → Express on `127.0.0.1:3045`).
+A documentation standard and supporting service for per-project agent-readable wikis. Each project in your workspace gets a single `AGENTS.md` describing intent, architecture, deployment, gotchas, and cross-project links. This repo defines the spec, hosts cross-cutting topics, and runs a small read-only browser/API.
 
 ## Status
 
-**Spec + indexer + server + UI + sweeper.** Today:
+**Spec + indexer + server + UI + sweeper.** All pieces working:
 
-- Spec defined ([spec/schema.md](spec/schema.md)), template ([spec/template.md](spec/template.md)), topics tier rules ([spec/topics.md](spec/topics.md)). `topics/` empty.
-- Indexer runs clean: parses frontmatter + sections + links, validates, writes `index/{projects,topics,backlinks,search,validation}.json`. Also writes generated backlinks footers back into source `AGENTS.md` files (`write_backlinks.ts`).
-- Read-only HTTP API in `service/src/server/` with Google OAuth (allowlist) + file-based sessions, mounted at `/wiki`. JSON endpoints for projects, topics, search, validation, raw doc bodies.
+- Spec defined ([spec/schema.md](spec/schema.md)), template ([spec/template.md](spec/template.md)), topics tier rules ([spec/topics.md](spec/topics.md)).
+- Indexer parses frontmatter + sections + links, validates, writes `index/{projects,topics,backlinks,search,validation}.json`. Also writes generated backlinks footers back into source `AGENTS.md` files (`write_backlinks.ts`).
+- Read-only HTTP API in `service/src/server/` with Google OAuth (allowlist) + file-based sessions, mounted at `PATH_PREFIX` (default `/wiki`). JSON endpoints for projects, topics, search, validation, raw doc bodies.
 - React + Vite UI in `ui/`, served by the Express process from `ui/dist/`. Pages: Home, Project, Topic, Search, Validation, Login. Markdown rendered with `react-markdown` + `remark-gfm`; cross-doc links rewritten to in-app routes.
 - Sweeper service in `service/src/sweeper/`: gathers per-project git activity since `last_updated`, calls the Claude API (streaming, 32k max_tokens, string-aware brace-counter parser), applies section-level patches, updates frontmatter. CLI supports per-project runs, `--all` fan-out, and `--dry-run`.
-- Deployed to secorp.net: `agent-wiki.service` runs as system-mode systemd on `127.0.0.1:3045`; Apache vhost proxies `/wiki → 127.0.0.1:3045/wiki`; `https://secorp.net/wiki` serves the UI behind Google OAuth allowlist. Deploy walkthrough in [deploy/setup.md](deploy/setup.md).
-- All 17 sibling projects migrated and committed; each has an `AGENTS.md` plus a `CLAUDE.md` stub of `@AGENTS.md`.
-- Scheduling installed locally: daily user-mode systemd timer at 03:00 (`agent-wiki-sweeper.timer`) runs `sweeper --all && indexer build`; Claude Code Stop-hook fires per-project sweep async via `systemd-run --user --no-block`, debounced to 60 min/project (mtime stamps in `~/.local/state/agent-wiki/last-sweep/`).
-- `~/.claude/CLAUDE.md` documents the AGENTS.md convention so future sessions read it before grepping.
-
-Next milestones: backfill `topics/` with cross-cutting knowledge as it surfaces in real sessions; (stretch) public GitHub-backed variant.
+- Optional automation: a daily user-mode systemd timer (`agent-wiki-sweeper.timer`) runs `sweeper --all && indexer build`; a Claude Code Stop-hook (`deploy/sweep-on-stop.sh`) fires per-project sweeps async, debounced to 60 min/project.
 
 ## Repository Layout
 
@@ -38,13 +32,14 @@ Next milestones: backfill `topics/` with cross-cutting knowledge as it surfaces 
 agent-wiki/
 ├── AGENTS.md                  this file (own dogfood)
 ├── README.md                  human-facing intro
+├── LICENSE                    MIT
 ├── spec/
 │   ├── schema.md              the AGENTS.md spec — sections, frontmatter, links
 │   ├── template.md            starter file for new projects
 │   ├── initial-AGENTS.md      minimal bootstrap doc for programmatic project init
 │   └── topics.md              when to use a topic vs a project gotcha
-├── topics/                    cross-cutting knowledge files (empty for now)
-├── index/                     generated by the indexer
+├── topics/                    cross-cutting knowledge files (scaffolded; populate as needed)
+├── index/                     generated by the indexer (gitignored)
 │   ├── projects.json          per-project metadata, sections, links
 │   ├── topics.json            per-topic metadata
 │   ├── backlinks.json         reverse link graph
@@ -64,9 +59,9 @@ agent-wiki/
 │       │   ├── types.ts       shared types + canonical section list
 │       │   └── sources/       Source interface + filesystem impl
 │       │       ├── types.ts   pluggable for future GitHub-backed source
-│       │       └── fs.ts      walks ~/termag/projects/
+│       │       └── fs.ts      walks PROJECTS_ROOT
 │       ├── server/            Express + Passport (Google OAuth) + JSON API
-│       │   ├── index.ts       app entry; mounts /wiki, listens on :3045
+│       │   ├── index.ts       app entry; mounts PATH_PREFIX, listens on PORT
 │       │   ├── config.ts      env-driven config; required()/optional()
 │       │   ├── auth.ts        Google OAuth + ALLOWED_EMAILS allowlist
 │       │   ├── api.ts         JSON endpoints under /api
@@ -82,25 +77,25 @@ agent-wiki/
 │           └── types.ts       shared sweeper types
 ├── ui/                        React + Vite SPA, served by the backend
 │   ├── package.json
-│   ├── vite.config.ts         base: '/wiki/', dev proxy → :3045
+│   ├── vite.config.ts         base: PATH_PREFIX, dev proxy → backend
 │   ├── index.html
 │   └── src/
-│       ├── main.tsx           BrowserRouter basename="/wiki"
+│       ├── main.tsx           BrowserRouter basename=PATH_PREFIX
 │       ├── App.tsx            auth gate + routes
-│       ├── api.ts             typed fetch client for /wiki/api/*
+│       ├── api.ts             typed fetch client for ${PATH_PREFIX}/api/*
 │       ├── styles.css
 │       ├── components/
 │       │   ├── Layout.tsx     topbar + search box + nav + user
 │       │   └── Markdown.tsx   react-markdown w/ in-app link rewriting
 │       └── pages/             Home, Project, Topic, Search, Validation, Login
 └── deploy/
-    ├── agent-wiki.service           systemd unit for the web service (User=secorp, hardened)
+    ├── agent-wiki.service           systemd unit for the web service (hardened)
     ├── agent-wiki-sweeper.service   user-mode unit invoked by the timer / Stop-hook
     ├── agent-wiki-sweeper.timer     daily 03:00 fan-out sweep + reindex
     ├── run-daily.sh                 timer entrypoint: sweeper --all then indexer build
     ├── sweep-on-stop.sh             Claude Code Stop-hook: debounced async per-project sweep
     ├── sweep-project.sh             single-project sweep helper used by hook + systemd-run
-    ├── apache.conf                  ProxyPass /wiki → 127.0.0.1:3045
+    ├── apache.conf                  ProxyPass example
     └── setup.md                     step-by-step install walkthrough
 ```
 
@@ -123,24 +118,24 @@ Topics (lives in agent-wiki/topics/)
 Service runtime:
 
 ```
-Browser ──https──▶ Apache (:443, /wiki/*) ──http──▶ Express (:3045, /wiki/*)
-                                                       ├── /wiki/auth/*       Passport (Google OAuth, allowlist)
-                                                       ├── /wiki/api/*        JSON (projects, topics, search, validation, raw)
-                                                       ├── /wiki/static/*     UI assets from ui/dist
-                                                       └── /wiki/*            SPA fallback → ui/dist/index.html
-                                                Reads index/*.json on every request (no cache for v1).
-                                                Reads raw AGENTS.md / topic files on demand, restricted to docs in the index.
+Browser ──https──▶ Reverse proxy (:443, PATH_PREFIX/*) ──http──▶ Express (:PORT, PATH_PREFIX/*)
+                                                                    ├── PATH_PREFIX/auth/*   Passport (Google OAuth, allowlist)
+                                                                    ├── PATH_PREFIX/api/*    JSON (projects, topics, search, validation, raw)
+                                                                    ├── PATH_PREFIX/static/* UI assets from ui/dist
+                                                                    └── PATH_PREFIX/*        SPA fallback → ui/dist/index.html
+                                                             Reads index/*.json on every request (no cache for v1).
+                                                             Reads raw AGENTS.md / topic files on demand, restricted to docs in the index.
 ```
 
-**Trade-off: single file per project vs many** — chose single file. Existing rssreader (~240 lines) and colonization-cargo-tracker (~315 lines) `CLAUDE.md` files prove one file scales for real projects, and stable section headings preserve the ability to patch surgically. Multi-file would help with parallel contributors but adds navigation overhead the workspace doesn't need.
+**Trade-off: single file per project vs many** — chose single file. One file scales surprisingly well for real projects (200–300 lines is normal), and stable section headings preserve the ability to patch surgically. Multi-file would help with parallel contributors but adds navigation overhead the typical workspace doesn't need.
 
-**Trade-off: `AGENTS.md` vs `CLAUDE.md`** — chose `AGENTS.md` because termag projects use both Claude Code and Codex; `AGENTS.md` is the emerging cross-runtime standard. Claude Code projects can include a one-line `CLAUDE.md` stub (`@AGENTS.md`) to preserve auto-loading.
+**Trade-off: `AGENTS.md` vs `CLAUDE.md`** — chose `AGENTS.md` because the convention is meant to work across runtimes (Claude Code, Codex, etc.); `AGENTS.md` is the emerging cross-runtime standard. Claude Code projects can include a one-line `CLAUDE.md` stub (`@AGENTS.md`) to preserve auto-loading.
 
 **Trade-off: project-hosted insights vs tiered** — chose tiered. Cross-cutting pitfalls that apply to multiple projects don't have a natural "owner" project, so they live in `topics/` with backlinks. Project-specific gotchas stay in their project. See [spec/topics.md](spec/topics.md) for the promotion workflow.
 
-**Trade-off: dedicated service vs in-process agent invocation** — chose dedicated Node service against the Claude API (when built). Runs unattended via systemd/cron, doesn't depend on tmux session state, can fan out across projects in parallel, and writes commits as a clear bot identity.
+**Trade-off: dedicated service vs in-process agent invocation** — chose a dedicated Node service against the Claude API. Runs unattended via systemd/cron, doesn't depend on tmux session state, can fan out across projects in parallel, and writes commits as a clear bot identity.
 
-**Trade-off: Express serves both UI and API vs split frontend/backend** — chose unified. Single process, single Apache prefix, no CORS, sessions just work. Mirrors the rssreader / meeting-slack-app pattern that's already proven on this host. The cost is a `npm run build` step in `ui/` before each deploy.
+**Trade-off: Express serves both UI and API vs split frontend/backend** — chose unified. Single process, single reverse-proxy prefix, no CORS, sessions just work. The cost is a `npm run build` step in `ui/` before each deploy.
 
 ## Configuration
 
@@ -148,14 +143,15 @@ Server config is environment-driven via `service/.env` (gitignored). See `servic
 
 | Var | Notes |
 |-----|-------|
-| `BASE_URL` | `https://secorp.net` in prod, `http://localhost:3045` for local |
-| `PATH_PREFIX` | `/wiki` (default). All routes mount under this. |
+| `BASE_URL` | Public URL where the service is reachable (e.g. `https://example.com`) |
+| `PATH_PREFIX` | Subpath the app is mounted at (default `/wiki`). All routes mount under this. |
 | `SESSION_SECRET` | Long random hex; rotating invalidates all sessions |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | From Google Cloud OAuth client; redirect URI is `${BASE_URL}${PATH_PREFIX}/auth/google/callback` |
-| `ALLOWED_EMAILS` | Comma-separated allowlist (default: `secorp@gmail.com`) |
-| `INDEX_DIR` | Where the indexer writes JSON (default: `~/termag/projects/agent-wiki/index`) |
-| `PROJECTS_ROOT` | Where AGENTS.md files live (default: `~/termag/projects`) |
-| `UI_DIST` | Built UI bundle (default: `~/termag/projects/agent-wiki/ui/dist`) |
+| `ALLOWED_EMAILS` | Comma-separated allowlist of permitted Google emails |
+| `PROJECTS_ROOT` | Parent dir containing the projects whose `AGENTS.md` files this wiki indexes. **Required** — no default. |
+| `INDEX_DIR` | Optional override; defaults to repo-relative `index/` |
+| `UI_DIST` | Optional override; defaults to repo-relative `ui/dist` |
+| `ANTHROPIC_API_KEY` | Required for the sweeper only |
 
 ## Build, Run, Deploy
 
@@ -171,7 +167,7 @@ npm run server                  # tsx → :3045
 # Terminal 2 — UI dev server with HMR
 cd ui
 npm install
-npm run dev                     # vite → :5173, proxies /wiki/{api,auth} → :3045
+npm run dev                     # vite → :5173, proxies PATH_PREFIX/{api,auth} → :3045
 ```
 
 Visit `http://localhost:5173/wiki/` for the Vite dev server, or `http://localhost:3045/wiki/` to test the production-style flow (server hosting `ui/dist`).
@@ -188,25 +184,23 @@ npm run indexer -- validate     # validate-only; exit non-zero on errors
 
 ```bash
 cd service
-npm run sweeper -- run --project rssreader      # sweep one project
-npm run sweeper -- run --all                     # sweep every migrated project
-npm run sweeper -- run --project foo --dry-run   # show patch without writing
+npm run sweeper -- run --project myproject    # sweep one project
+npm run sweeper -- run --all                  # sweep every project under PROJECTS_ROOT
+npm run sweeper -- run --project myproject --dry-run   # show patch without writing
 ```
 
 Requires `ANTHROPIC_API_KEY` in `service/.env`. Sweeper reads each project's `last_updated`, gathers git activity since then, calls the Claude API for proposed section-level patches, and applies them in place. Re-run the indexer afterward to refresh `index/*.json`.
 
-**Production deploy (one-time install):** see `deploy/setup.md` for the full walkthrough. Summary: build, fill in `service/.env`, install systemd unit (`deploy/agent-wiki.service`), splice Apache snippet (`deploy/apache.conf`) into `secorp.conf`, reload Apache.
+**Production deploy (one-time install):** see `deploy/setup.md` for the full walkthrough. Summary: build, fill in `service/.env`, install systemd unit (`deploy/agent-wiki.service`), splice reverse-proxy snippet (`deploy/apache.conf` or equivalent) into your vhost, reload the proxy.
 
 **Production updates:** `git pull && (cd service && npm install && npm run build) && (cd ui && npm install && npm run build) && sudo systemctl restart agent-wiki`.
 
 ## Observability & Maintenance
 
-- `index/validation.json` reports every spec-compliance issue from the last index build. The UI exposes it at `/wiki/validation`. `npm run indexer -- validate` runs the same checks and exits non-zero on errors.
+- `index/validation.json` reports every spec-compliance issue from the last index build. The UI exposes it at `${PATH_PREFIX}/validation`. `npm run indexer -- validate` runs the same checks and exits non-zero on errors.
 - `journalctl -u agent-wiki -f` for service logs.
-- `GET /wiki/api/health` for a no-auth liveness probe (currently the only unauthenticated API endpoint besides OAuth).
+- `GET ${PATH_PREFIX}/api/health` for a no-auth liveness probe (currently the only unauthenticated API endpoint besides OAuth).
 - File-based sessions live in `service/.sessions/` (gitignored). Deleting the directory force-logs everyone out.
-
-When the maintenance/sweeper service is added, a `health.json` will report per-project staleness (time since `last_updated`, lines of code changed since the last wiki commit, broken cross-links).
 
 ## Integration Surfaces
 
@@ -214,16 +208,16 @@ The JSON API is intentionally small and stable so agents can call it directly:
 
 | Endpoint | Returns |
 |----------|---------|
-| `GET /wiki/api/projects` | All projects with frontmatter, sections, outgoing links + unmigrated list |
-| `GET /wiki/api/projects/:name` | Single project + raw markdown body + incoming backlinks |
-| `GET /wiki/api/topics` | All cross-cutting topics |
-| `GET /wiki/api/topics/:slug` | Single topic + raw + backlinks |
-| `GET /wiki/api/search?q=...` | Flat per-section matches (substring, case-insensitive); capped at 100 |
-| `GET /wiki/api/validation` | Latest spec-compliance report |
-| `GET /wiki/api/health` | `{ ok: true }` (unauthenticated) |
-| `GET /wiki/auth/google` | OAuth start |
-| `POST /wiki/auth/logout` | Destroy session |
-| `GET /wiki/api/auth/me` | Current session user (or 401) |
+| `GET ${PATH_PREFIX}/api/projects` | All projects with frontmatter, sections, outgoing links + unmigrated list |
+| `GET ${PATH_PREFIX}/api/projects/:name` | Single project + raw markdown body + incoming backlinks |
+| `GET ${PATH_PREFIX}/api/topics` | All cross-cutting topics |
+| `GET ${PATH_PREFIX}/api/topics/:slug` | Single topic + raw + backlinks |
+| `GET ${PATH_PREFIX}/api/search?q=...` | Flat per-section matches (substring, case-insensitive); capped at 100 |
+| `GET ${PATH_PREFIX}/api/validation` | Latest spec-compliance report |
+| `GET ${PATH_PREFIX}/api/health` | `{ ok: true }` (unauthenticated) |
+| `GET ${PATH_PREFIX}/auth/google` | OAuth start |
+| `POST ${PATH_PREFIX}/auth/logout` | Destroy session |
+| `GET ${PATH_PREFIX}/api/auth/me` | Current session user (or 401) |
 
 All API endpoints (except `/health` and the OAuth dance) require an authenticated session matching `ALLOWED_EMAILS`.
 
@@ -243,24 +237,13 @@ All API endpoints (except `/health` and the OAuth dance) require an authenticate
 
 7. **`ui/dist/` is not committed** — building the UI is a deploy-time step. The server returns a 503 with a build-instruction message if `ui/dist/index.html` is missing, so a fresh clone won't silently serve a blank page.
 
-8. **`base: '/wiki/'` in `vite.config.ts` and `basename="/wiki"` in `BrowserRouter` must agree with `PATH_PREFIX`** — if you change the prefix, change all three. Otherwise asset URLs and router resolution diverge.
+8. **`base: PATH_PREFIX` in `vite.config.ts` and `basename=PATH_PREFIX` in `BrowserRouter` must agree with the server's `PATH_PREFIX` env var** — if you change the prefix, change all three. Otherwise asset URLs and router resolution diverge.
+
+9. **`PROJECTS_ROOT` has no default** — it's the parent dir of the projects this wiki indexes, and that's install-specific. The server and sweeper both fail-fast with a clear error if it's not set in `service/.env`.
 
 ## Related
 
 **Other projects:**
-- [termag](../termag/AGENTS.md) — workspace orchestrator; will eventually trigger the wiki sweeper via systemd or its own scheduler
-- [rssreader](../rssreader/AGENTS.md) — first migrated example; same Apache-prefix + Express + Passport + Google OAuth pattern this service uses
-- [meeting-slack-app](../meeting-slack-app/AGENTS.md) — second migrated example; single-process backend serving its own static UI, mirrors this service's deploy shape
-- [colonization-cargo-tracker](../colonization-cargo-tracker/CLAUDE.md) — pending migration; strong domain model section worth preserving
+- [termag](https://github.com/secorp-net/termag) — workspace orchestrator that uses agent-wiki as its docs spec; can drive the wiki sweeper via Claude Code Stop hooks
 
 **Topics:** none yet.
-
-<!-- agent-wiki:backlinks-start -->
-- [colonization-cargo-tracker](../colonization-cargo-tracker/AGENTS.md) — Related
-- [indicators-of-econ](../indicators-of-econ/AGENTS.md) — Related
-- [interesting-opportunity-collator](../interesting-opportunity-collator/AGENTS.md) — Related
-- [mommo-site](../mommo-site/AGENTS.md) — Related
-- [termag](../termag/AGENTS.md) — Related
-- [twilio-talker](../twilio-talker/AGENTS.md) — Related
-- [typing-lag](../typing-lag/AGENTS.md) — Related
-<!-- agent-wiki:backlinks-end -->

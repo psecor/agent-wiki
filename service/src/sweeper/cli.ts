@@ -15,12 +15,26 @@ import { gatherProject } from "./gather.js";
 import { buildPrompt } from "./prompt.js";
 import { sweepProject, type SweepReport, type SweepOptions } from "./run.js";
 
+// Built file lives at service/dist/sweeper/cli.js, so three levels up is
+// the agent-wiki repo root.
+const REPO_ROOT = resolve(__dirname, "../../..");
+
 const SPEC_PATH =
   process.env.AGENT_WIKI_SPEC_PATH ??
-  resolve("/home/secorp/termag/projects/agent-wiki/spec/schema.md");
-const PROJECTS_ROOT =
-  process.env.AGENT_WIKI_PROJECTS_ROOT ??
-  resolve("/home/secorp/termag/projects");
+  resolve(REPO_ROOT, "spec/schema.md");
+
+// PROJECTS_ROOT has no sensible default — it's the parent dir containing
+// the sibling projects this sweeper maintains. Required at install time.
+const PROJECTS_ROOT = (() => {
+  const v = process.env.AGENT_WIKI_PROJECTS_ROOT ?? process.env.PROJECTS_ROOT;
+  if (!v) {
+    throw new Error(
+      "AGENT_WIKI_PROJECTS_ROOT (or PROJECTS_ROOT) must be set — " +
+      "point it at the parent dir of the projects you want to sweep.",
+    );
+  }
+  return resolve(v);
+})();
 const AUTHOR_AGENT = process.env.SWEEPER_AGENT ?? "agent:sweeper-claude-opus-4-7";
 
 interface CliArgs {

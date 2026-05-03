@@ -7,11 +7,14 @@
 # for quick at-a-glance access without `journalctl` ceremony.
 #
 # Run interactively to dry-test:
-#   ~/termag/projects/agent-wiki/deploy/run-daily.sh
+#   <repo>/deploy/run-daily.sh
 
 set -euo pipefail
 
-SERVICE_DIR="/home/secorp/termag/projects/agent-wiki/service"
+# Resolve SERVICE_DIR relative to this script's location so the path works
+# regardless of where the repo is checked out.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVICE_DIR="$(cd "${SCRIPT_DIR}/../service" && pwd)"
 STATE_DIR="${HOME}/.local/state/agent-wiki"
 LOG="${STATE_DIR}/last-run.log"
 

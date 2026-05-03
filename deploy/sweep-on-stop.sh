@@ -13,11 +13,15 @@
 #
 # All hook scripts must exit 0 quickly: failures here must NOT break
 # the user's Claude session, so we swallow errors and log them.
+#
+# Set PROJECTS_ROOT in the environment (or via service/.env, which is
+# sourced below) to point at the parent dir of the projects you want
+# swept on Stop. With no PROJECTS_ROOT set, the hook does nothing.
 
 set -uo pipefail
 
-PROJECTS_ROOT="/home/secorp/termag/projects"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVICE_DIR="$(cd "${SCRIPT_DIR}/../service" && pwd)"
 STATE_DIR="${HOME}/.local/state/agent-wiki"
 DEBOUNCE_DIR="${STATE_DIR}/last-sweep"
 HOOK_LOG="${STATE_DIR}/stop-hook.log"
@@ -26,6 +30,18 @@ DEBOUNCE_SECS=3600  # 60 min
 mkdir -p "${DEBOUNCE_DIR}"
 
 log() { echo "$(date -Iseconds) $*" >> "${HOOK_LOG}"; }
+
+# Pick up PROJECTS_ROOT from service/.env if not already set.
+if [[ -z "${PROJECTS_ROOT:-}" && -f "${SERVICE_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${SERVICE_DIR}/.env"
+  set +a
+fi
+
+if [[ -z "${PROJECTS_ROOT:-}" ]]; then
+  exit 0
+fi
 
 INPUT="$(cat)"
 CWD="$(printf '%s' "${INPUT}" | python3 -c \

@@ -1,6 +1,7 @@
 // Environment-driven server config. Fail fast on missing required values.
 
 import "dotenv/config";
+import { resolve } from "node:path";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -11,6 +12,10 @@ function required(name: string): string {
 function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
+
+// Built file lives at service/dist/server/config.js, so three levels up is
+// the agent-wiki repo root.
+const REPO_ROOT = resolve(__dirname, "../../..");
 
 export const config = {
   port: Number(optional("PORT", "3045")),
@@ -23,9 +28,10 @@ export const config = {
     .split(",")
     .map(s => s.trim().toLowerCase())
     .filter(Boolean),
-  indexDir: optional("INDEX_DIR", "/home/secorp/termag/projects/agent-wiki/index"),
-  projectsRoot: optional("PROJECTS_ROOT", "/home/secorp/termag/projects"),
-  uiDist: optional("UI_DIST", "/home/secorp/termag/projects/agent-wiki/ui/dist"),
+  indexDir: optional("INDEX_DIR", resolve(REPO_ROOT, "index")),
+  // No default — the parent dir containing sibling projects is install-specific.
+  projectsRoot: required("PROJECTS_ROOT"),
+  uiDist: optional("UI_DIST", resolve(REPO_ROOT, "ui/dist")),
 };
 
 export type Config = typeof config;

@@ -1,17 +1,25 @@
 # agent-wiki
 
-A documentation standard and (eventually) a maintenance service for **per-project agent-readable wikis**. Each project under `~/termag/projects/` (and any project that opts in) gets a single `AGENTS.md` at its root that describes intent, architecture, deployment, gotchas, and links to related work — written for humans first, but structured so that AI agents can read, navigate, and update it reliably.
+A documentation standard and a maintenance service for **per-project agent-readable wikis**. Each project in your workspace gets a single `AGENTS.md` at its root that describes intent, architecture, deployment, gotchas, and links to related work — written for humans first, but structured so that AI agents can read, navigate, and update it reliably.
 
 This repo holds:
 
 - The **spec** for what an `AGENTS.md` looks like ([spec/schema.md](spec/schema.md))
 - A copy-paste **template** for new projects ([spec/template.md](spec/template.md))
 - The **topics tier** — cross-cutting knowledge that doesn't belong to any one project ([topics/](topics/))
-- (Future) A **service** that keeps wikis fresh, propagates cross-project insights, and rebuilds the cross-project index
+- A **service** (`service/`) that runs a small Express app exposing a read-only browser/API of all your project wikis, plus a sweeper that uses Claude to keep each `AGENTS.md` in sync with recent git activity
+- A **UI** (`ui/`) — React frontend served by the same service
 
 ## Status
 
-**Spec-only.** The service is not yet built. For now, wikis are written and updated by hand (or by an agent invoked manually). The intent is to graduate to automated maintenance once the spec is proven against 3–5 real projects.
+**Working.** The spec is stable, the service runs in production for the maintainer's project tree, and the daily sweeper has been keeping ~17 project wikis fresh. Topics tier is scaffolded but mostly empty — populate as cross-cutting knowledge surfaces.
+
+## Prerequisites
+
+- **Node.js** 20+
+- **Anthropic API key** (only needed if you want the sweeper to auto-maintain `AGENTS.md` files — the spec and template work standalone)
+- **Apache** with `mod_proxy`, `mod_proxy_http`, `mod_headers` (or another reverse proxy) — only needed if you want to serve the browser UI publicly behind HTTPS
+- **Google OAuth client** — only needed if you want sign-in protection on the browser UI
 
 ## Why this exists
 
