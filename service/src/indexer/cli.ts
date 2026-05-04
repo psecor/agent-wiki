@@ -4,28 +4,33 @@
 //   indexer build [--projects-root <path>] [--out <path>]
 //   indexer validate [--projects-root <path>]
 //
-// Defaults: projects-root = ~/termag/projects, out = <agent-wiki>/index
+// Defaults:
+//   --projects-root  $PROJECTS_ROOT (env var; required if flag not given)
+//   --out            $INDEX_DIR (env var) || <repo-root>/index
 
+import "dotenv/config";
 import path from "node:path";
-import os from "node:os";
 import { build } from "./build.js";
 import { FsSource } from "./sources/fs.js";
 import { writeBacklinks } from "./write_backlinks.js";
 
-const DEFAULT_PROJECTS_ROOT = path.join(os.homedir(), "termag", "projects");
-const DEFAULT_AGENT_WIKI = path.join(DEFAULT_PROJECTS_ROOT, "agent-wiki");
-const DEFAULT_OUT = path.join(DEFAULT_AGENT_WIKI, "index");
+// Built file lives at service/dist/indexer/cli.js, so three levels up is
+// the agent-wiki repo root.
+const REPO_ROOT = path.resolve(__dirname, "../../..");
+const DEFAULT_OUT = process.env.INDEX_DIR ?? path.resolve(REPO_ROOT, "index");
 
 interface Args {
   command: "build" | "validate" | "help";
-  projectsRoot: string;
+  projectsRoot: string | undefined;
   out: string;
   writeBacklinks: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
   const command = (argv[0] ?? "build") as Args["command"];
-  let projectsRoot = DEFAULT_PROJECTS_ROOT;
+  let projectsRoot: string | undefined = process.env.PROJECTS_ROOT
+    ? path.resolve(process.env.PROJECTS_ROOT)
+    : undefined;
   let out = DEFAULT_OUT;
   let writeBacklinksFlag = true;
   for (let i = 1; i < argv.length; i++) {
@@ -57,8 +62,8 @@ Usage:
   indexer validate  [--projects-root <path>]
 
 Defaults:
-  --projects-root  ${DEFAULT_PROJECTS_ROOT}
-  --out            ${DEFAULT_OUT}
+  --projects-root  $PROJECTS_ROOT (required if flag not given)
+  --out            $INDEX_DIR or ${DEFAULT_OUT}
 
 build           Discover, parse, write index/*.json, and refresh backlinks
                 blocks inside each project's AGENTS.md.
@@ -72,6 +77,15 @@ async function main(): Promise<void> {
   if (args.command === "help") {
     printHelp();
     return;
+  }
+
+  if (!args.projectsRoot) {
+    console.error(
+      "PROJECTS_ROOT is not set and --projects-root was not given. " +
+      "Set PROJECTS_ROOT in service/.env (or pass --projects-root) " +
+      "to point at the parent dir containing the projects to index.",
+    );
+    process.exit(2);
   }
 
   const source = new FsSource({ projectsRoot: args.projectsRoot });
