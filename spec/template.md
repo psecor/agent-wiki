@@ -14,7 +14,7 @@ status_description: "<one sentence: what's stable, what's not, where deployed if
 last_updated: YYYY-MM-DD
 last_updated_by:
   - agent:<model-id>      # e.g. claude-opus-4-7
-  - human:<handle>        # e.g. secorp
+  - human:<handle>        # e.g. alice
 wiki_schema_version: 1
 ---
 

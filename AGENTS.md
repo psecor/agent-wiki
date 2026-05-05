@@ -244,6 +244,6 @@ All API endpoints (except `/health` and the OAuth dance) require an authenticate
 ## Related
 
 **Other projects:**
-- [termag](https://github.com/secorp-net/termag) — workspace orchestrator that uses agent-wiki as its docs spec; can drive the wiki sweeper via Claude Code Stop hooks
+- [termag](https://github.com/psecor/termag) — workspace orchestrator that uses agent-wiki as its docs spec; can drive the wiki sweeper via Claude Code Stop hooks
 
 **Topics:** none yet.
