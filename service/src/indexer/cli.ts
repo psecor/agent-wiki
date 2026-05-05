@@ -10,12 +10,14 @@
 
 import "dotenv/config";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { build } from "./build.js";
 import { FsSource } from "./sources/fs.js";
 import { writeBacklinks } from "./write_backlinks.js";
 
 // Built file lives at service/dist/indexer/cli.js, so three levels up is
-// the agent-wiki repo root.
+// the agent-wiki repo root. (ESM has no __dirname.)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const DEFAULT_OUT = process.env.INDEX_DIR ?? path.resolve(REPO_ROOT, "index");
 

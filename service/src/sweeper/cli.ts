@@ -10,13 +10,15 @@
 
 import "dotenv/config";
 import { readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { gatherProject } from "./gather.js";
 import { buildPrompt } from "./prompt.js";
 import { sweepProject, type SweepReport, type SweepOptions } from "./run.js";
 
 // Built file lives at service/dist/sweeper/cli.js, so three levels up is
-// the agent-wiki repo root.
+// the agent-wiki repo root. (ESM has no __dirname.)
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../..");
 
 const SPEC_PATH =
