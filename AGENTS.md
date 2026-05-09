@@ -2,7 +2,7 @@
 project: agent-wiki
 status: production
 status_description: "A documentation standard and supporting service for per-project agent-readable wikis. Spec, indexer, web service, and Claude-powered sweeper for keeping AGENTS.md files fresh."
-last_updated: 2026-05-03
+last_updated: 2026-05-06
 last_updated_by:
   - agent:claude-opus-4-7
   - agent:sweeper-claude-opus-4-7
@@ -239,7 +239,9 @@ All API endpoints (except `/health` and the OAuth dance) require an authenticate
 
 8. **`base: PATH_PREFIX` in `vite.config.ts` and `basename=PATH_PREFIX` in `BrowserRouter` must agree with the server's `PATH_PREFIX` env var** — if you change the prefix, change all three. Otherwise asset URLs and router resolution diverge.
 
-9. **`PROJECTS_ROOT` has no default** — it's the parent dir of the projects this wiki indexes, and that's install-specific. The server and sweeper both fail-fast with a clear error if it's not set in `service/.env`.
+9. **`PROJECTS_ROOT` has no default** — it's the parent dir of the projects this wiki indexes, and that's install-specific. The server, indexer, and sweeper all fail-fast with a clear error if it's not set in `service/.env`.
+
+10. **No `__dirname` in compiled CLIs** — `service/` is ESM, so `__dirname` is undefined at runtime. CLIs that need a repo-relative default path (e.g. indexer `--out`) must derive it from `import.meta.url` via `fileURLToPath`. Reaching for `__dirname` will compile fine but blow up the first time the CLI runs.
 
 ## Related
 
