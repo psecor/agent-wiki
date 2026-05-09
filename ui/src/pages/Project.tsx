@@ -55,6 +55,14 @@ export function Project(): JSX.Element {
             </li>
           ))}
         </ul>
+        <h3>Cross-refs</h3>
+        <ul>
+          <li>
+            <a href={`/security/projects/${encodeURIComponent(state.project.name)}`}>
+              Security findings →
+            </a>
+          </li>
+        </ul>
       </aside>
 
       <div className="doc-body">
