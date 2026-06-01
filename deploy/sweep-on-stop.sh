@@ -73,7 +73,8 @@ fi
 STAMP="${DEBOUNCE_DIR}/${PROJECT}"
 if [[ -f "${STAMP}" ]]; then
   NOW=$(date +%s)
-  THEN=$(stat -c %Y "${STAMP}" 2>/dev/null || echo 0)
+  # BSD stat (macOS) uses -f %m; GNU stat (Linux) uses -c %Y.
+  THEN=$(stat -f %m "${STAMP}" 2>/dev/null || stat -c %Y "${STAMP}" 2>/dev/null || echo 0)
   AGE=$(( NOW - THEN ))
   if (( AGE < DEBOUNCE_SECS )); then
     log "skip ${PROJECT}: swept ${AGE}s ago"
@@ -84,14 +85,22 @@ fi
 # Claim the slot before forking, so concurrent Stops bail.
 touch "${STAMP}"
 
-# Fire-and-forget. systemd-run --user --no-block returns immediately;
-# the sweep runs as a transient unit owned by the user manager.
-if ! systemd-run --user --no-block \
-      --unit="agent-wiki-sweep-${PROJECT}-$$" \
-      --description="agent-wiki sweep ${PROJECT}" \
-      "${SCRIPT_DIR}/sweep-project.sh" "${PROJECT}" >/dev/null 2>&1; then
-  log "systemd-run failed for ${PROJECT}"
-  exit 0
+# Fire-and-forget. On Linux we prefer systemd-run --user --no-block (transient
+# unit owned by the user manager, surfaces in journalctl). On macOS — or any
+# host without systemd-run — fall back to a detached nohup background process,
+# which is enough for fire-and-forget since the sweep is short-lived and we
+# already log its output to STATE_DIR.
+if command -v systemd-run >/dev/null 2>&1; then
+  if ! systemd-run --user --no-block \
+        --unit="agent-wiki-sweep-${PROJECT}-$$" \
+        --description="agent-wiki sweep ${PROJECT}" \
+        "${SCRIPT_DIR}/sweep-project.sh" "${PROJECT}" >/dev/null 2>&1; then
+    log "systemd-run failed for ${PROJECT}"
+    exit 0
+  fi
+else
+  nohup "${SCRIPT_DIR}/sweep-project.sh" "${PROJECT}" >/dev/null 2>&1 </dev/null &
+  disown 2>/dev/null || true
 fi
 
 log "queued ${PROJECT}"

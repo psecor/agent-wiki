@@ -30,11 +30,19 @@ fi
 
 cd "${SERVICE_DIR}"
 
+# Resolve node from PATH so this works on macOS (Homebrew at /opt/homebrew/bin)
+# and Linux (typically /usr/bin/node) without hardcoding a path.
+NODE_BIN="${NODE_BIN:-$(command -v node || true)}"
+if [[ -z "${NODE_BIN}" ]]; then
+  echo "node not found on PATH" >> "${LOG}"
+  exit 1
+fi
+
 {
   echo "=== sweep ${PROJECT}: $(date -Iseconds) ==="
-  /usr/bin/node dist/sweeper/cli.js "${PROJECT}"
+  "${NODE_BIN}" dist/sweeper/cli.js "${PROJECT}"
   echo ">>> indexer build"
-  /usr/bin/node dist/indexer/cli.js build
+  "${NODE_BIN}" dist/indexer/cli.js build
   echo "=== done: $(date -Iseconds) ==="
   echo
 } >> "${LOG}" 2>&1
