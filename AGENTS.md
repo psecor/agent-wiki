@@ -2,7 +2,7 @@
 project: agent-wiki
 status: production
 status_description: "A documentation standard and supporting service for per-project agent-readable wikis. Spec, indexer, web service, and Claude-powered sweeper for keeping AGENTS.md files fresh."
-last_updated: 2026-05-06
+last_updated: 2026-06-01
 last_updated_by:
   - agent:claude-opus-4-7
   - agent:sweeper-claude-opus-4-7
@@ -151,7 +151,7 @@ Server config is environment-driven via `service/.env` (gitignored). See `servic
 | `PROJECTS_ROOT` | Parent dir containing the projects whose `AGENTS.md` files this wiki indexes. **Required** — no default. |
 | `INDEX_DIR` | Optional override; defaults to repo-relative `index/` |
 | `UI_DIST` | Optional override; defaults to repo-relative `ui/dist` |
-| `ANTHROPIC_API_KEY` | Required for the sweeper only |
+| `ANTHROPIC_API_KEY` | Sweeper only. Optional if the Claude Code CLI auth path is available (see Build, Run, Deploy). |
 
 ## Build, Run, Deploy
 
@@ -189,9 +189,9 @@ npm run sweeper -- run --all                  # sweep every project under PROJEC
 npm run sweeper -- run --project myproject --dry-run   # show patch without writing
 ```
 
-Requires `ANTHROPIC_API_KEY` in `service/.env`. Sweeper reads each project's `last_updated`, gathers git activity since then, calls the Claude API for proposed section-level patches, and applies them in place. Re-run the indexer afterward to refresh `index/*.json`.
+The sweeper supports two auth paths to the Claude API: `ANTHROPIC_API_KEY` in `service/.env` (preferred for headless/systemd runs), or the Claude Code CLI's own credentials when `claude` is on `PATH` and already logged in (handy for interactive desktop use). It prefers the env var if both are present. Sweeper reads each project's `last_updated`, gathers git activity since then, calls the Claude API for proposed section-level patches, and applies them in place. Re-run the indexer afterward to refresh `index/*.json`.
 
-**Production deploy (one-time install):** see `deploy/setup.md` for the full walkthrough. Summary: build, fill in `service/.env`, install systemd unit (`deploy/agent-wiki.service`), splice reverse-proxy snippet (`deploy/apache.conf` or equivalent) into your vhost, reload the proxy.
+**Production deploy (one-time install):** see `deploy/setup.md` for the full walkthrough. Summary: build, fill in `service/.env`, install systemd unit (`deploy/agent-wiki.service`), splice reverse-proxy snippet (`deploy/apache.conf` or equivalent) into your vhost, reload the proxy. The `deploy/*.sh` scripts are portable across macOS and Linux (no GNU-only flags, BSD-compatible `date`/`stat`/`flock` fallbacks) so the Stop-hook works on dev laptops as well as Linux servers.
 
 **Production updates:** `git pull && (cd service && npm install && npm run build) && (cd ui && npm install && npm run build) && sudo systemctl restart agent-wiki`.
 
@@ -242,6 +242,8 @@ All API endpoints (except `/health` and the OAuth dance) require an authenticate
 9. **`PROJECTS_ROOT` has no default** — it's the parent dir of the projects this wiki indexes, and that's install-specific. The server, indexer, and sweeper all fail-fast with a clear error if it's not set in `service/.env`.
 
 10. **No `__dirname` in compiled CLIs** — `service/` is ESM, so `__dirname` is undefined at runtime. CLIs that need a repo-relative default path (e.g. indexer `--out`) must derive it from `import.meta.url` via `fileURLToPath`. Reaching for `__dirname` will compile fine but blow up the first time the CLI runs.
+
+11. **Keep `deploy/*.sh` portable across macOS and Linux** — the Stop-hook and sweep helpers run on developer laptops (BSD userland) as well as Linux servers (GNU userland). Avoid GNU-only flags on `date`, `stat`, `sed`, `readlink`; prefer POSIX or branch on `uname`. The debounce path uses a portable mtime check rather than `flock`, which isn't on macOS by default.
 
 ## Related
 

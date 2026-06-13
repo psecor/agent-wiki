@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent for the agent-wiki daily sweep + reindex.
+
+  Symmetric with the Linux systemd timer (deploy/agent-wiki-sweeper.{service,timer})
+  — runs `deploy/run-daily.sh` once a day. Install steps:
+
+    1. Edit the placeholders below:
+       - Label (reverse-DNS, must be unique on this Mac)
+       - ProgramArguments path → absolute path to your run-daily.sh
+       - PATH → include the directory containing your `node` binary
+         (Homebrew on Apple Silicon: /opt/homebrew/bin; Intel: /usr/local/bin)
+       - StandardOutPath / StandardErrorPath → expand $HOME yourself
+         (launchd does NOT expand ~ or env vars in these fields)
+    2. Copy to ~/Library/LaunchAgents/<Label>.plist
+    3. Load:    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<Label>.plist
+    4. Verify:  launchctl list | grep agent-wiki
+    5. One-off off-schedule run for validation:
+                launchctl kickstart -p gui/$(id -u)/<Label>
+
+  Notes:
+    - StartCalendarInterval does NOT fire while the Mac is asleep; macOS
+      catches up on next wake. If you need the Mac to wake on schedule,
+      pair with `sudo pmset repeat wakeorpoweron MTWRFSU 02:55:00`.
+    - launchd jobs inherit a minimal PATH, so the EnvironmentVariables
+      block is required for run-daily.sh's `command -v node` to succeed.
+    - To unload:  launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/<Label>.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.example.agent-wiki-sweeper</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/REPLACE_ME/path/to/agent-wiki/deploy/run-daily.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/REPLACE_ME/.local/state/agent-wiki/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/REPLACE_ME/.local/state/agent-wiki/launchd.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
