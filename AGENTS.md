@@ -2,7 +2,7 @@
 project: agent-wiki
 status: production
 status_description: "A documentation standard and supporting service for per-project agent-readable wikis. Spec, indexer, web service, and Claude-powered sweeper for keeping AGENTS.md files fresh."
-last_updated: 2026-06-01
+last_updated: 2026-06-14
 last_updated_by:
   - agent:claude-opus-4-7
   - agent:sweeper-claude-opus-4-7
@@ -23,8 +23,8 @@ A documentation standard and supporting service for per-project agent-readable w
 - Indexer parses frontmatter + sections + links, validates, writes `index/{projects,topics,backlinks,search,validation}.json`. Also writes generated backlinks footers back into source `AGENTS.md` files (`write_backlinks.ts`).
 - Read-only HTTP API in `service/src/server/` with Google OAuth (allowlist) + file-based sessions, mounted at `PATH_PREFIX` (default `/wiki`). JSON endpoints for projects, topics, search, validation, raw doc bodies.
 - React + Vite UI in `ui/`, served by the Express process from `ui/dist/`. Pages: Home, Project, Topic, Search, Validation, Login. Markdown rendered with `react-markdown` + `remark-gfm`; cross-doc links rewritten to in-app routes.
-- Sweeper service in `service/src/sweeper/`: gathers per-project git activity since `last_updated`, calls the Claude API (streaming, 32k max_tokens, string-aware brace-counter parser), applies section-level patches, updates frontmatter. CLI supports per-project runs, `--all` fan-out, and `--dry-run`.
-- Optional automation: a daily user-mode systemd timer (`agent-wiki-sweeper.timer`) runs `sweeper --all && indexer build`; a Claude Code Stop-hook (`deploy/sweep-on-stop.sh`) fires per-project sweeps async, debounced to 60 min/project.
+- Sweeper service in `service/src/sweeper/`: gathers per-project git activity since `last_updated`, calls the Claude API (streaming, 32k max_tokens, string-aware brace-counter parser), applies section-level patches, updates frontmatter. CLI supports per-project runs, `--all` fan-out, and `--dry-run`. Sweeper auth supports both `ANTHROPIC_API_KEY` and the Claude Code CLI's own credentials.
+- Optional automation: on Linux, a daily user-mode systemd timer (`agent-wiki-sweeper.timer`) runs `sweeper --all && indexer build`; on macOS, an equivalent LaunchAgent (`agent-wiki-sweeper.plist`) does the same. A Claude Code Stop-hook (`deploy/sweep-on-stop.sh`) fires per-project sweeps async, debounced to 60 min/project, and is portable across both OSes.
 
 ## Repository Layout
 
@@ -71,7 +71,7 @@ agent-wiki/
 │           ├── run.ts         orchestrates one project's sweep
 │           ├── gather.ts      git log + diffstat + changed files since last_updated
 │           ├── prompt.ts      assembles the system + user prompt
-│           ├── claude.ts      Claude API client wrapper
+│           ├── claude.ts      Claude API client wrapper (env key or Claude Code CLI auth)
 │           ├── apply.ts       applies section-level patches + frontmatter updates
 │           ├── diff.ts        shows the proposed change
 │           └── types.ts       shared sweeper types
@@ -91,8 +91,9 @@ agent-wiki/
 └── deploy/
     ├── agent-wiki.service           systemd unit for the web service (hardened)
     ├── agent-wiki-sweeper.service   user-mode unit invoked by the timer / Stop-hook
-    ├── agent-wiki-sweeper.timer     daily 03:00 fan-out sweep + reindex
-    ├── run-daily.sh                 timer entrypoint: sweeper --all then indexer build
+    ├── agent-wiki-sweeper.timer     daily 03:00 fan-out sweep + reindex (Linux)
+    ├── agent-wiki-sweeper.plist     macOS LaunchAgent equivalent of the timer
+    ├── run-daily.sh                 timer/LaunchAgent entrypoint: sweeper --all then indexer build
     ├── sweep-on-stop.sh             Claude Code Stop-hook: debounced async per-project sweep
     ├── sweep-project.sh             single-project sweep helper used by hook + systemd-run
     ├── apache.conf                  ProxyPass example
